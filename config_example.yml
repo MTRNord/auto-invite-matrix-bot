@@ -1,0 +1,7 @@
+---
+message: "This is an automated message. You seem to have invited one of my other Matrix Accounts. A Bot has now invited the correct user. Please be patient until I respond!"
+servers:
+  - address: "https://mozilla.modular.im"
+    mxid: "@mtrnord:mozilla.org"
+    access_token: "" # Use either access_token or password
+    password: "" # Use either access_token or password

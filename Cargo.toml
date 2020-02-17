@@ -1,0 +1,20 @@
+[package]
+name = "auto-invite-matrix-bot"
+version = "0.1.0"
+authors = ["Marcel <mtrnord1@gmail.com>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+ruma-client = "0.3.0"
+futures-core = "0.3.4"
+futures-util = "0.3.4"
+tokio = { version = "0.2.11", features = ["macros"] }
+url = "2.1.1"
+clap = { git = "https://github.com/clap-rs/clap/" }
+serde = { version = "1.0", features = ["derive"] }
+serde_yaml = "0.8"
+
+[patch.crates-io]
+ruma-identifiers = { git = 'https://github.com/ruma/ruma-identifiers.git' }
