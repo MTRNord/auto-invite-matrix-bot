@@ -3,24 +3,24 @@ use std::convert::TryFrom;
 use clap::Clap;
 use futures_util::future::join_all;
 use futures_util::stream::TryStreamExt as _;
-use ruma_client::{
-    self,
-    events::{
-        EventType,
-        room::message::{MessageEventContent, NoticeMessageEventContent},
-    },
-    HttpsClient, Session,
-};
 use ruma_client::api::r0::membership::invite_user;
 use ruma_client::api::r0::membership::join_room_by_id;
 use ruma_client::api::r0::message::create_message_event;
 use ruma_client::api::r0::sync::sync_events::IncomingResponse;
 use ruma_client::identifiers::UserId;
+use ruma_client::{
+    self,
+    events::{
+        room::message::{MessageEventContent, NoticeMessageEventContent},
+        EventType,
+    },
+    HttpsClient, Session,
+};
 use url::Url;
 
 use log::{debug, error, info};
 
-use crate::config::{Config, Homeserver, load_config};
+use crate::config::{load_config, Config, Homeserver};
 use crate::logger::setup_logger;
 
 mod config;
@@ -120,7 +120,6 @@ struct Opts {
 #[tokio::main]
 async fn main() -> Result<(), ruma_client::Error> {
     let opts: Opts = Opts::parse();
-
 
     let log_level = match opts.verbose {
         0 => log::LevelFilter::Info,  // default
