@@ -23,6 +23,8 @@ use crate::config::{load_config, Config, Homeserver};
 mod config;
 
 async fn do_stuff(config: &Config, server: &Homeserver) -> Result<(), ruma_client::Error> {
+    println!("Starting session as {}", server.mxid);
+
     let session: Session;
     let mut client: HttpsClient = HttpsClient::https(
         Url::parse(server.address.as_str()).expect("unable to parse url"),
