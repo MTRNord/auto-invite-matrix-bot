@@ -3,27 +3,31 @@ use std::convert::TryFrom;
 use clap::Clap;
 use futures_util::future::join_all;
 use futures_util::stream::TryStreamExt as _;
+use ruma_client::{
+    self,
+    events::{
+        EventType,
+        room::message::{MessageEventContent, NoticeMessageEventContent},
+    },
+    HttpsClient, Session,
+};
 use ruma_client::api::r0::membership::invite_user;
 use ruma_client::api::r0::membership::join_room_by_id;
 use ruma_client::api::r0::message::create_message_event;
 use ruma_client::api::r0::sync::sync_events::IncomingResponse;
 use ruma_client::identifiers::UserId;
-use ruma_client::{
-    self,
-    events::{
-        room::message::{MessageEventContent, NoticeMessageEventContent},
-        EventType,
-    },
-    HttpsClient, Session,
-};
 use url::Url;
 
-use crate::config::{load_config, Config, Homeserver};
+use log::{debug, error, info};
+
+use crate::config::{Config, Homeserver, load_config};
+use crate::logger::setup_logger;
 
 mod config;
+mod logger;
 
 async fn do_stuff(config: &Config, server: &Homeserver) -> Result<(), ruma_client::Error> {
-    println!("Starting session as {}", server.mxid);
+    info!("Starting session as {}", server.mxid);
 
     let session: Session;
     let mut client: HttpsClient = HttpsClient::https(
@@ -59,7 +63,7 @@ async fn do_stuff(config: &Config, server: &Homeserver) -> Result<(), ruma_clien
             )
             .await?;
     } else {
-        println!("Please provide either a password or an access_token!");
+        error!("Please provide either a password or an access_token!");
     }
 
     let mut sync_stream = Box::pin(client.sync(None, None, false));
@@ -69,21 +73,21 @@ async fn do_stuff(config: &Config, server: &Homeserver) -> Result<(), ruma_clien
         let res: IncomingResponse = response;
         for (room_id, _room) in res.rooms.invite {
             // Auto join rooms
-            println!("Invited to {:?}", room_id.clone());
+            debug!("Invited to {:?}", room_id.clone());
             client
                 .request(join_room_by_id::Request {
                     room_id: room_id.clone(),
                     third_party_signed: None,
                 })
                 .await?;
-            println!("Joined {:?}", room_id.clone());
+            debug!("Joined {:?}", room_id.clone());
             let response = client
                 .request(invite_user::Request {
                     room_id: room_id.clone(),
                     user_id: UserId::try_from(target_user.clone().as_str()).unwrap(),
                 })
                 .await?;
-            println!("Invited correct user {:?}", response);
+            debug!("Invited correct user {:?}", response);
             client
                 .request(create_message_event::Request {
                     room_id,
@@ -96,7 +100,7 @@ async fn do_stuff(config: &Config, server: &Homeserver) -> Result<(), ruma_clien
                 })
                 .await?;
 
-            println!("Sent a message about what happened");
+            debug!("Sent a message about what happened");
         }
     }
 
@@ -117,13 +121,16 @@ struct Opts {
 async fn main() -> Result<(), ruma_client::Error> {
     let opts: Opts = Opts::parse();
 
-    // TODO actually implement logger
-    match opts.verbose {
-        0 => println!("No verbose info"),
-        1 => println!("Some verbose info"),
-        2 => println!("Tons of verbose info"),
-        3 | _ => println!("Don't be crazy"),
-    }
+
+    let log_level = match opts.verbose {
+        0 => log::LevelFilter::Info,  // default
+        1 => log::LevelFilter::Error, // -v
+        2 => log::LevelFilter::Warn,  // -vv
+        3 => log::LevelFilter::Debug, // -vvv
+        _ => log::LevelFilter::Trace, // -vvvv and above
+    };
+
+    setup_logger(log_level).expect("unable to setup logger");
 
     let config = load_config(opts.config).expect("unable to read config");
     let mut futures = vec![];
