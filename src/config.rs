@@ -6,6 +6,7 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
 pub struct Config {
     pub message: String,
+    pub target_user: String,
     pub servers: Vec<Homeserver>,
 }
 

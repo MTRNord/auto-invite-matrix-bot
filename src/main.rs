@@ -62,6 +62,7 @@ async fn do_stuff(config: &Config, server: &Homeserver) -> Result<(), ruma_clien
 
     let mut sync_stream = Box::pin(client.sync(None, None, false));
     let message = config.message.clone();
+    let target_user = config.target_user.clone();
     while let Some(response) = sync_stream.try_next().await? {
         let res: IncomingResponse = response;
         for (room_id, _room) in res.rooms.invite {
@@ -77,7 +78,7 @@ async fn do_stuff(config: &Config, server: &Homeserver) -> Result<(), ruma_clien
             let response = client
                 .request(invite_user::Request {
                     room_id: room_id.clone(),
-                    user_id: UserId::try_from("@MTRNord:matrix.ffslfl.net").unwrap(),
+                    user_id: UserId::try_from(target_user.clone().as_str()).unwrap(),
                 })
                 .await?;
             println!("Invited correct user {:?}", response);
