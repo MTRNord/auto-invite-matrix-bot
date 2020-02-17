@@ -17,7 +17,6 @@ pub struct Homeserver {
     pub password: Option<String>,
 }
 
-
 pub fn load_config(config_file: String) -> Result<Config, serde_yaml::Error> {
     let f = File::open(config_file).expect("Unable to open config file");
     let br = BufReader::new(f);
