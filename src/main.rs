@@ -3,6 +3,9 @@ use std::convert::TryFrom;
 use clap::Clap;
 use futures_util::future::join_all;
 use futures_util::stream::TryStreamExt as _;
+use log::{debug, error, info};
+use rand::distributions::Alphanumeric;
+use rand::{thread_rng, Rng};
 use ruma_client::api::r0::membership::invite_user;
 use ruma_client::api::r0::membership::join_room_by_id;
 use ruma_client::api::r0::message::create_message_event;
@@ -10,15 +13,20 @@ use ruma_client::api::r0::sync::sync_events::IncomingResponse;
 use ruma_client::identifiers::UserId;
 use ruma_client::{
     self,
+    api::r0::message::create_message_event::Response,
     events::{
-        room::message::{MessageEventContent, NoticeMessageEventContent},
+        collections::all::RoomEvent::RoomMessage,
+        room::message::{
+            InReplyTo,
+            MessageEventContent::{self, Text},
+            NoticeMessageEventContent, RelatesTo,
+        },
         EventType,
     },
+    identifiers::{EventId, RoomId},
     HttpsClient, Session,
 };
 use url::Url;
-
-use log::{debug, error, info};
 
 use crate::config::{load_config, Config, Homeserver};
 use crate::logger::setup_logger;
@@ -26,7 +34,31 @@ use crate::logger::setup_logger;
 mod config;
 mod logger;
 
-async fn do_stuff(config: &Config, server: &Homeserver) -> Result<(), ruma_client::Error> {
+async fn send_notice_reply(
+    client: &HttpsClient,
+    text: String,
+    related_event: EventId,
+    room_id: RoomId,
+) -> Result<Response, ruma_client::Error> {
+    let rand_string: String = thread_rng().sample_iter(&Alphanumeric).take(30).collect();
+    client
+        .request(create_message_event::Request {
+            room_id,
+            event_type: EventType::RoomMessage,
+            txn_id: rand_string,
+            data: MessageEventContent::Notice(NoticeMessageEventContent {
+                body: text,
+                relates_to: Some(RelatesTo {
+                    in_reply_to: InReplyTo {
+                        event_id: related_event,
+                    },
+                }),
+            }),
+        })
+        .await
+}
+
+async fn get_client(server: &Homeserver) -> Result<HttpsClient, ruma_client::Error> {
     info!("Starting session as {}", server.mxid);
 
     let session: Session;
@@ -65,6 +97,54 @@ async fn do_stuff(config: &Config, server: &Homeserver) -> Result<(), ruma_clien
     } else {
         error!("Please provide either a password or an access_token!");
     }
+    Ok(client)
+}
+
+// TODO create control room and invite user
+// TODO Add DB
+
+async fn parse_invites(
+    client: &HttpsClient,
+    room_id: RoomId,
+    target_user: String,
+    message: String,
+) -> Result<(), ruma_client::Error> {
+    // Auto join rooms
+    debug!("Invited to {:?}", room_id);
+    client
+        .request(join_room_by_id::Request {
+            room_id: room_id.clone(),
+            third_party_signed: None,
+        })
+        .await?;
+    debug!("Joined {:?}", room_id.clone());
+    let response = client
+        .request(invite_user::Request {
+            room_id: room_id.clone(),
+            user_id: UserId::try_from(target_user.as_str()).unwrap(),
+        })
+        .await?;
+    debug!("Invited correct user {:?}", response);
+
+    let rand_string: String = thread_rng().sample_iter(&Alphanumeric).take(30).collect();
+    client
+        .request(create_message_event::Request {
+            room_id: room_id.clone(),
+            event_type: EventType::RoomMessage,
+            txn_id: rand_string,
+            data: MessageEventContent::Notice(NoticeMessageEventContent {
+                body: message,
+                relates_to: None,
+            }),
+        })
+        .await?;
+
+    debug!("Sent a message about what happened");
+    Ok(())
+}
+
+async fn do_stuff(config: &Config, server: &Homeserver) -> Result<(), failure::Error> {
+    let client = get_client(server).await?;
 
     let mut sync_stream = Box::pin(client.sync(None, None, false));
     let message = config.message.clone();
@@ -72,35 +152,67 @@ async fn do_stuff(config: &Config, server: &Homeserver) -> Result<(), ruma_clien
     while let Some(response) = sync_stream.try_next().await? {
         let res: IncomingResponse = response;
         for (room_id, _room) in res.rooms.invite {
-            // Auto join rooms
-            debug!("Invited to {:?}", room_id.clone());
-            client
-                .request(join_room_by_id::Request {
-                    room_id: room_id.clone(),
-                    third_party_signed: None,
-                })
-                .await?;
-            debug!("Joined {:?}", room_id.clone());
-            let response = client
-                .request(invite_user::Request {
-                    room_id: room_id.clone(),
-                    user_id: UserId::try_from(target_user.clone().as_str()).unwrap(),
-                })
-                .await?;
-            debug!("Invited correct user {:?}", response);
-            client
-                .request(create_message_event::Request {
-                    room_id,
-                    event_type: EventType::RoomMessage,
-                    txn_id: "1".to_owned(),
-                    data: MessageEventContent::Notice(NoticeMessageEventContent {
-                        body: message.clone(),
-                        relates_to: None,
-                    }),
-                })
-                .await?;
+            parse_invites(
+                &client,
+                room_id.clone(),
+                target_user.clone(),
+                message.clone(),
+            )
+            .await?;
+        }
+        for (room_id, room) in res.rooms.join {
+            // TODO message main account in control room about the mention and allow them to either get invited or to acknowledge it
+            let events = room.timeline.events;
 
-            debug!("Sent a message about what happened");
+            for event_pure in events {
+                let event = event_pure.into_result().map_err(failure::Error::from)?;
+                if let RoomMessage(msg) = event {
+                    let content = msg.content;
+                    let event_id = msg.event_id;
+                    let sender = msg.sender;
+                    if let Text(msg_content) = content {
+                        let formatted_body: Option<String> = msg_content.formatted_body;
+                        let body: String = msg_content.body;
+
+                        if formatted_body.is_some()
+                            && formatted_body.unwrap().contains(&server.mxid.clone())
+                        {
+                            // TODO keep track of already listened to messages and Make relay chat
+                            if config.debug {
+                                send_notice_reply(
+                                    &client,
+                                    format!("> <{}> {}\n\n[DEBUG] Mentioned main account about this mention", sender, body),
+                                    event_id.clone(),
+                                    room_id.clone(),
+                                )
+                                    .await?;
+                            }
+                        } else if body
+                            .contains(server.mxid.clone().split(':').collect::<Vec<_>>()[0])
+                        {
+                            if config.debug {
+                                send_notice_reply(
+                                    &client,
+                                    format!("> <{}> {}\n\n[DEBUG] Mentioned main account about this mention", sender, body),
+                                    event_id.clone(),
+                                    room_id.clone(),
+                                )
+                                    .await?;
+                            }
+                        }
+                        // Todo make a smarter command handler
+                        /*if body.starts_with("!test") {
+                            send_notice_reply(
+                                &client,
+                                format!("> <{}> {}\n\ntest resp", sender, body),
+                                event_id.clone(),
+                                room_id.clone(),
+                            )
+                            .await?;
+                        }*/
+                    }
+                }
+            }
         }
     }
 
