@@ -1,6 +1,7 @@
 ---
 message: "This is an automated message. You seem to have invited one of my other Matrix Accounts. A Bot has now invited the correct user. Please be patient until I respond!"
 target_user: "@MTRNord:matrix.ffslfl.net"
+debug: true
 servers:
   - address: "https://mozilla.modular.im"
     mxid: "@mtrnord:mozilla.org"

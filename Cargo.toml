@@ -18,7 +18,9 @@ serde_yaml = "0.8"
 log = "0.4.8"
 fern = "0.5"
 chrono = "0.4.10"
-
+rand = "0.7.3"
+failure = "0.1.6"
 
 [patch.crates-io]
 ruma-identifiers = { git = 'https://github.com/ruma/ruma-identifiers.git' }
+ruma-events = { git = 'https://github.com/MTRNord/ruma-events.git', branch = "relates_to_backport" }
