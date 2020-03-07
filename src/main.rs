@@ -471,6 +471,5 @@ async fn main() -> Result<(), failure::Error> {
         error!("{:?}", x);
     }
 
-
     Ok(())
 }
