@@ -187,8 +187,6 @@ async fn get_client(
     Ok((client, control_room_id))
 }
 
-// TODO create control room and invite user
-
 async fn parse_invites(
     client: &HttpsClient,
     room_id: RoomId,
@@ -417,7 +415,6 @@ async fn do_stuff(config: &Config, server: &Homeserver) -> Result<(), failure::E
             .await?;
         }
         for (room_id, room) in res.rooms.join {
-            // TODO message main account in control room about the mention and allow them to either get invited or to acknowledge it
             let events = room.timeline.events;
 
             for event in events.into_iter().flat_map(|r| r.into_result()) {
