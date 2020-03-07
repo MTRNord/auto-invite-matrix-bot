@@ -4,7 +4,6 @@ use std::fs::File;
 use std::io::{BufReader, BufWriter, Read, Write};
 
 use clap::Clap;
-use futures_util::future::join_all;
 use futures_util::stream::FuturesUnordered;
 use futures_util::stream::TryStreamExt as _;
 use log::{debug, error, info, warn};
@@ -94,19 +93,19 @@ async fn get_control_room(
 ) -> Result<RoomId, failure::Error> {
     fs::create_dir_all("./tmp/")?;
     let mut room_id_read = String::new();
-    return match File::open(format!(
+    match File::open(format!(
         "./tmp/control_room_{}",
         client.session().unwrap().user_id.hostname()
     )) {
         Ok(f) => {
             let mut br = BufReader::new(f);
-            return match br.read_to_string(&mut room_id_read) {
+            match br.read_to_string(&mut room_id_read) {
                 Ok(_) => {
                     let room_id = RoomId::try_from(room_id_read.as_str()).unwrap();
                     Ok(room_id)
                 }
                 Err(e) => Err(failure::Error::try_from(e)?),
-            };
+            }
         }
         Err(e) => {
             warn!("Unable to open control_room_tmp: {}", e);
@@ -134,7 +133,7 @@ async fn get_control_room(
 
             Ok(room_id)
         }
-    };
+    }
 }
 
 async fn get_client(
@@ -289,7 +288,7 @@ async fn parse_joins(
             {
                 handle_mention(
                     client,
-                    config.clone(),
+                    config,
                     control_room_id.clone(),
                     room_id.clone(),
                     sender.clone(),
@@ -310,7 +309,7 @@ async fn parse_joins(
             {
                 handle_mention(
                     client,
-                    config.clone(),
+                    config,
                     control_room_id.clone(),
                     room_id.clone(),
                     sender.clone(),
@@ -461,7 +460,7 @@ async fn main() -> Result<(), failure::Error> {
     setup_logger(log_level).expect("unable to setup logger");
 
     let config = load_config(opts.config).expect("unable to read config");
-    //let mut futures = vec![];
+
     let mut futures = FuturesUnordered::new();
 
     config.servers.iter().for_each(|x| {
@@ -472,11 +471,6 @@ async fn main() -> Result<(), failure::Error> {
         error!("{:?}", x);
     }
 
-    //let all = join_all(futures).await;
-
-    //all.iter().for_each(|x| {
-    //    error!("{:?}", x);
-    //});
 
     Ok(())
 }
