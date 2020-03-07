@@ -2,3 +2,4 @@
 **/*.rs.bk
 config.yaml
 output.log
+tmp/
