@@ -438,10 +438,10 @@ async fn do_stuff(config: &Config, server: &Homeserver) -> Result<(), failure::E
 #[derive(Clap)]
 #[clap(version = "0.1.0", author = "MTRNord")]
 struct Opts {
-    #[clap(short = "c", long = "config", default_value = "config.yaml")]
+    #[clap(short = 'c', long = "config", default_value = "config.yaml")]
     config: String,
     /// A level of verbosity, and can be used multiple times
-    #[clap(short = "v", long = "verbose", parse(from_occurrences))]
+    #[clap(short = 'v', long = "verbose", parse(from_occurrences))]
     verbose: i32,
 }
 
